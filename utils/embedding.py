@@ -5,7 +5,7 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
 
-def get_embeddings_provider(provider_name: str) -> Any:
+def get_embeddings_provider(provider_name: str) -> GoogleGenerativeAIEmbeddings | OpenAIEmbeddings | NVIDIAEmbeddings:
     provider = provider_name.lower().strip()
 
     if provider == "google" or provider == "gemini":
