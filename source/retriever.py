@@ -5,8 +5,6 @@ from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from langchain_classic.retrievers.multi_query import MultiQueryRetriever
 
 def get_retriever(provider_name: str, vectordb: Chroma) -> MultiQueryRetriever:
-    base_retriever = vectordb.as_retriever(search_kwargs={"k": 3})
-
     provider = provider_name.lower().strip()
 
     if provider == "openai":
@@ -21,7 +19,9 @@ def get_retriever(provider_name: str, vectordb: Chroma) -> MultiQueryRetriever:
     else:
         raise ValueError(f"Provider '{provider_name}' is unsupported.")
 
-    multi_query_retriever = MultiQueryRetriever(
+    base_retriever = vectordb.as_retriever(search_kwargs={"k": 3})
+
+    multi_query_retriever = MultiQueryRetriever.from_llm(
         retriever=base_retriever,
         llm=llm
     )

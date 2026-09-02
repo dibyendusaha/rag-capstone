@@ -10,7 +10,7 @@ def get_embeddings_provider(provider_name: str) -> GoogleGenerativeAIEmbeddings 
 
     if provider == "google" or provider == "gemini":
         return GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004"
+            model="models/gemini-embedding-001"
         )
 
     elif provider == "openai":

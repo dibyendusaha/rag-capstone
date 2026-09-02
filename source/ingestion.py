@@ -53,11 +53,11 @@ def load_documents(path: str) -> List[Document]:
         else:
             ext = os.path.splitext(path)[1].lower()
             if ext in [".txt", ".md"]:
-                text_to_document(path=path)
+                return text_to_document(path=path)
             elif ext == ".pdf":
-                pdf_to_document(path=path)
+                return pdf_to_document(path=path)
             elif ext in [".docx", ".docs"]:
-                docx_to_document(path=path)
+                return docx_to_document(path=path)
 
     except Exception as e:
         print(f"Got an Eception while trying to load the file: {e}")

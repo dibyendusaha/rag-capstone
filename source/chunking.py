@@ -7,11 +7,12 @@ def split_documents(documents: List[Document], chunk_size: int = 1000, chunk_ove
     spillter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     splitted_documents = []
 
-    for chunk, document in enumerate(documents, start=1):
-        text = spillter.split_text(document)
-        metadata = dict(document.metadata) if document.metadata else {}
-        metadata.chunk_index = chunk
-        document = Document(page_content=text, metadata=metadata)
-        splitted_documents.append(document)
+    for document in documents:
+        text = spillter.split_text(document.page_content)
+        for i, t in enumerate(text, start=1):
+            metadata = dict(document.metadata) if document.metadata else {}
+            metadata["chunk_index"] = i
+            document = Document(page_content=t, metadata=metadata)
+            splitted_documents.append(document)
 
     return splitted_documents
