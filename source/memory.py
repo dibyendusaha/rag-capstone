@@ -43,7 +43,7 @@ def get_session_message_summary(session_id: str, provider_name: str) -> Conversa
     return SESSION_MESSAGE_SUMMARY[session_id]
 
 def get_session_active_memory(session_id: str):
-    return SESSION_ACTIVE_MEMORY[session_id]
+    return SESSION_ACTIVE_MEMORY.get(session_id, [])
 
 def update_session_active_memory(session_id: str, user_input: str, ai_output: str):
     if session_id not in SESSION_ACTIVE_MEMORY:
@@ -66,17 +66,21 @@ def get_active_memory_formatted(session_id: str) -> str:
         return "\n\n".join(conversation)
 
 
-def get_memory_summary(session_id: str):
-    return get_session_message_summary(session_id=session_id).load_memory_variables({}).get("summary", "")
+def get_memory_summary(session_id: str, provider: str):
+    return get_session_message_summary(session_id=session_id, provider_name=provider).load_memory_variables({}).get("summary", "")
 
 
-def add_memory_to_rag_chain(session_id: str, rag_chain, enabled: bool):
+def get_active_context(session_id: str) -> str:
+    return get_active_memory_formatted(session_id)
+
+
+def add_memory_to_rag_chain(session_id: str, provider: str, rag_chain, enabled: bool):
     if not enabled:
         print(f"🧠 Memory is not enabled. Stateless chat.")
         return rag_chain
 
     print(f"🧠 Hybrid memory is enabled for the session {session_id}")
-    session_summary = get_session_message_summary(session_id=session_id)
+    session_summary = get_session_message_summary(session_id=session_id, provider_name=provider)
 
     def rag_chain_with_summary(input_data, config):
         response = rag_chain.invoke(input_data, config)
@@ -84,7 +88,7 @@ def add_memory_to_rag_chain(session_id: str, rag_chain, enabled: bool):
         ai_output = getattr(response, "content", str(response))
 
         # save session summary
-        session_summary.save_context({"input": user_input, "output": ai_output})
+        session_summary.save_context({"input": user_input}, {"output": ai_output})
 
         # update active summary
         update_session_active_memory(session_id=session_id, user_input=user_input, ai_output=ai_output)
