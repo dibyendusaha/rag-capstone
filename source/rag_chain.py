@@ -60,12 +60,30 @@ def build_rag_chain(provider_name: str, retriever: MultiQueryRetriever):
     Otherwise, combine retrieved context and memories to answer effectively.
     """)
 
+    """
+    If you are using memory.py
+    then use the below rag_chain RunnableSerializable
+    """
+    """
+        rag_chain = RunnableParallel({
+            "context": RunnableLambda(lambda x: x["question"]) | retriever | RunnableLambda(format_docs),
+            "question": RunnableLambda(lambda x: x["question"]),
+            "system_prompt": RunnableLambda(lambda _: system_prompt),
+            "active_memory": RunnableLambda(lambda x, config: get_active_context(config["configurable"]["session_id"])),
+            "memory_summary": RunnableLambda(lambda x, config: get_memory_summary(config["configurable"]["session_id"], config["configurable"]["provider"]))
+        }) | prompt | llm
+    """
+
+    """
+    If you are using native_memory.py
+    teh use the below rag_chain RunnableSerializable
+    """
     rag_chain = RunnableParallel({
         "context": RunnableLambda(lambda x: x["question"]) | retriever | RunnableLambda(format_docs),
         "question": RunnableLambda(lambda x: x["question"]),
         "system_prompt": RunnableLambda(lambda _: system_prompt),
-        "active_memory": RunnableLambda(lambda x, config: get_active_context(config["configurable"]["session_id"])),
-        "memory_summary": RunnableLambda(lambda x, config: get_memory_summary(config["configurable"]["session_id"], config["configurable"]["provider"]))
+        "active_memory": RunnableLambda(lambda x: x["current_memory"]),
+        "memory_summary": RunnableLambda(lambda x: x["memory_summary"])
     }) | prompt | llm
 
     return rag_chain
