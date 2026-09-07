@@ -1,4 +1,4 @@
-from langchain_classic.schema.runnable import RunnableLambda
+from langchain_core.runnables import RunnableLambda
 from langchain_classic.memory import ConversationSummaryMemory
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
