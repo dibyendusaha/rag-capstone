@@ -51,13 +51,16 @@ def load_documents(path: str) -> List[Document]:
             raise FileNotFoundError(f"File not found on path: {os.path.abspath(path)}")
 
         else:
-            ext = os.path.splitext(path)[1].lower()
-            if ext in [".txt", ".md"]:
-                return text_to_document(path=path)
-            elif ext == ".pdf":
+            name, ext = os.path.splitext(path)
+            ext = ext.lower()
+            if ext == ".pdf":
                 return pdf_to_document(path=path)
-            elif ext in [".docx", ".docs"]:
+            elif ext in [".txt", ".md"]:
+                return text_to_document(path=path)
+            elif ext in [".docx", ".docs", ".doc"]:
                 return docx_to_document(path=path)
+            else:
+                raise ValueError(f"{ext} is not supported")
 
     except Exception as e:
         print(f"Got an Eception while trying to load the file: {e}")

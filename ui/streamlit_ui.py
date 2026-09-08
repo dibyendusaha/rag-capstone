@@ -1,5 +1,16 @@
-import streamlit as st
+import os
+import sys
 import uuid
+from pathlib import Path
+
+import streamlit as st
+
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from source.ingestion import load_documents
+from source.chunking import split_documents
 
 if "chat_sessions" not in st.session_state:
     st.session_state.chat_sessions = list()
@@ -92,13 +103,17 @@ span.model-engine-title {
     gap: 4px;
     font-size: 16px;
     font-weight: bold;
-    margin-bottom: -8px;
+    margin-bottom: 0px;
 }
 
 span.model-engine-title span {
     color: deeppink !important;
     font-size: 24px !important;
     vertical-align: middle !important;
+}
+
+[class*="st-key-llm-provider"] {
+    margin-bottom: 16px !important;
 }
 
 .upload-label {
@@ -131,7 +146,7 @@ if st.sidebar.button("Start New Session", icon=":material/chat_add_on:", width="
         "name": new_name,
         "llm_provider": "GEMINI",
         "memory_enabled": False,
-        "chat_history": None
+        "chat_history": []
     }
     st.session_state.chat_sessions.append(chat_session)
     st.session_state.active_session = chat_session
@@ -144,7 +159,7 @@ if not len(st.session_state.chat_sessions):
         "name": new_name,
         "llm_provider": "GEMINI",
         "memory_enabled": False,
-        "chat_history": None
+        "chat_history": []
     }
     st.session_state.chat_sessions.append(chat_session)
     st.session_state.active_session = chat_session
@@ -175,7 +190,7 @@ st.sidebar.markdown("""
 st.session_state.active_session["llm_provider"] = st.sidebar.selectbox(
     "LLM Provider",
     options=["OPENAI", "GEMINI", "NVIDIA"],
-    key=f"llm_provider_{st.session_state.active_session.get("name", "default")}",
+    key=f"llm-provider-{(st.session_state.active_session.get("name", "default")).replace(" ", "-")}",
     index=["OPENAI", "GEMINI", "NVIDIA"].index(st.session_state.active_session.get("llm_provider", "GEMINI"))
 )
 
@@ -183,18 +198,18 @@ st.session_state.active_session["llm_provider"] = st.sidebar.selectbox(
 st.session_state.active_session["memory_enabled"] = st.sidebar.toggle(
     "Enable Context Memory",
     value=st.session_state.active_session["memory_enabled"],
-    key=f"memory_toggle_{st.session_state.active_session.get("name", "Chat Session - 1")}"
+    key=f"memory-toggle-{(st.session_state.active_session.get("name", "Chat Session - 1")).replace(" ", "-")}"
 )
 
 st.sidebar.divider(width="stretch")
 
 
-with st.expander(":material/note_stack: **Knowledge Base & File Hub**", expanded=False):
+with st.expander(":material/note_stack: **Knowledge Base & File Hub**", expanded=st.session_state.active_session.get("expander", True)):
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.metric(label="Indexed Documents", value="0")
+        st.metric(label="Indexed Documents", value=st.session_state.active_session.get("indexed_document_chunks", 0))
         
     with col2:
         st.metric(label="Active Chat Session", value=f"{st.session_state.active_session.get("name", "Chat Session - 1")}")
@@ -203,8 +218,79 @@ with st.expander(":material/note_stack: **Knowledge Base & File Hub**", expanded
 
     st.markdown("<div class='upload-label'>Upload Documents to Enrich Vector Memory</div>", unsafe_allow_html=True)
 
-    uploaded_files = st.file_uploader(
+    if "file_uploader_key" not in st.session_state:
+        st.session_state.file_uploader_key = 0
+
+    uploaded_document = st.file_uploader(
+        disabled=st.session_state.active_session.get("disabled_uploader", False),
+        key=f"uploader_{st.session_state.file_uploader_key}",
         label="Upload Documents to Enrich Vector Memory",
-        type=["pdf", "docx", "doc", "txt", "md"],
-        label_visibility="collapsed"
+        type=["pdf", "docx", "docs", "doc", "txt", "md"],
+        label_visibility="collapsed",
+        accept_multiple_files=False,
+        width="stretch"
     )
+
+    if uploaded_document:
+        with st.spinner("Ingesting and parsing documents for VectorDB embedding and indexing."):
+            _id = st.session_state.active_session.get("_id", uuid.uuid4())
+            file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "docs", f"{_id}_{uploaded_document.name}"))
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+            with open(file=file_path, mode="wb") as f:
+                f.write(uploaded_document.getbuffer())
+
+            try:
+                name, ext = os.path.splitext(file_path)
+                ext = ext.lower()
+                if ext == ".pdf":
+                    file_icon = ":material/picture_as_pdf:"
+                elif ext in [".txt", ".md"]:
+                    file_icon = ""
+                elif ext in [".docx", ".docs", ".doc"]:
+                    file_icon = ""
+                
+                documents = load_documents(path=file_path)
+                chunks = split_documents(documents=documents, chunk_size=1000, chunk_overlap=200)
+
+                st.session_state.active_session["indexed_document_filename"] = uploaded_document.name
+                st.session_state.active_session["indexed_document_chunks"] = len(chunks)
+                st.session_state.active_session["disabled_uploader"] = True
+                st.session_state.active_session["expander"] = False
+
+                st.session_state.file_uploader_key += 1
+                st.rerun()
+
+            except Exception as e:
+                st.error(f"We got an exception -> {e}", icon=":material/error:")
+
+    if "indexed_document_filename" in st.session_state.active_session:
+        st.success(f"VectorDB processed and indexed for - {st.session_state.active_session.get("indexed_document_filename", "")}")
+
+        st.markdown(
+            f"""
+            **Active file in context**
+            <br />
+            <span style="padding: 0 4px 0 0;">:material/description:</span> {st.session_state.active_session.get("indexed_document_filename", "")}
+            """,
+            unsafe_allow_html=True
+        )
+
+
+if "indexed_document_filename" in st.session_state.active_session:
+    openai = "https://img.icons8.com/fluency-systems-regular/48/chatgpt.png"
+    gemini = "https://img.icons8.com/skeuomorphism/32/gemini-ai.png"
+    nvidia = "https://img.icons8.com/color/48/nvidia.png"
+    user = "https://img.icons8.com/retro/64/user.png"
+
+    
+    for chat in st.session_state.active_session["chat_history"]:
+        with st.chat_message(
+            chat["role"],
+            avatar=":material/robot:" if chat["role"] == "assistant" else user
+        ):
+            st.markdown(chat["content"])
+
+
+if prompt := st.chat_input("Ask questions about your ingested document"):
+    st.session_state.active_session["chat_history"].append({"role": "user", "content": prompt})
