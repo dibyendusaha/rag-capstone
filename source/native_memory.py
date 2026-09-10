@@ -2,9 +2,9 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnableSerializable, RunnableLambda
 from langchain_core.chat_history import InMemoryChatMessageHistory
 
+from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
 
 def get_llm_provider(provider_name: str):
@@ -17,7 +17,7 @@ def get_llm_provider(provider_name: str):
         return ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0)
         
     elif provider == "nvidia":
-        return ChatNVIDIA(model="nvidia/llama-3.1-nemotron-70b-instruct", temperature=0)
+        return ChatGroq(model="openai/gpt-oss-20b", temperature=0)
         
     else:
         raise ValueError(f"Provider '{provider_name}' is unsupported.")
@@ -45,12 +45,14 @@ def update_session_active_memory(session_id: str, user_input: str, ai_output: st
 
 
 def get_formatted_session_active_memory(session_id) -> str:
-    history = SESSION_ACTIVE_MEMORY[session_id]
+    history = SESSION_ACTIVE_MEMORY.get(session_id, [])
 
     if not history:
         return "No history found for this chat."
 
-    return "\n\n".join(f"You: {chat["human"]}\nAI: {chat["ai"]}" for chat in history)
+    return "\n\n".join(
+        f"You: {chat['human']}\nAI: {chat['ai']}" for chat in history
+    )
 
 
 def get_session_summary_memory(session_id: str) -> str:
@@ -74,7 +76,7 @@ def summarize_chat_prompt_chain(llm) -> RunnableSerializable:
     return summary_prompt | llm
 
 
-def add_memory_to_rag_chain(session_id: str, rag_chain: RunnableSerializable, enabled: bool, provider: str):
+def add_memory_to_rag_chain(session_id: str, rag_chain: RunnableSerializable, enabled: bool, provider: str) -> RunnableLambda:
     if not enabled:
         print(f"🧠 Memory is not enabled for this chat.")
         return rag_chain
@@ -82,7 +84,7 @@ def add_memory_to_rag_chain(session_id: str, rag_chain: RunnableSerializable, en
     llm = get_llm_provider(provider_name=provider)
     summary_chain = summarize_chat_prompt_chain(llm)
 
-    def process_with_native_memory(input: dict, config = None):
+    def process_with_native_memory(input: dict):
         user_input = input["question"]
         
         history_obj = get_session_memory_history(session_id=session_id)

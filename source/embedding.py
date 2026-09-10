@@ -1,11 +1,8 @@
-import os
-from typing import Any
-
 from langchain_openai import OpenAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
 
-def get_embeddings_provider(provider_name: str) -> GoogleGenerativeAIEmbeddings | OpenAIEmbeddings | NVIDIAEmbeddings:
+def get_embeddings_provider(provider_name: str) -> GoogleGenerativeAIEmbeddings | OpenAIEmbeddings | HuggingFaceEmbeddings:
     provider = provider_name.lower().strip()
 
     if provider == "google" or provider == "gemini":
@@ -19,8 +16,8 @@ def get_embeddings_provider(provider_name: str) -> GoogleGenerativeAIEmbeddings 
         )
 
     elif provider == "nvidia":
-        return NVIDIAEmbeddings(
-            model="NV-Embed-QA"
+        return HuggingFaceEmbeddings(
+            model_name="BAAI/bge-small-en-v1.5"
         )
 
     else:

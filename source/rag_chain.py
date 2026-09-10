@@ -1,6 +1,6 @@
+from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
 from typing import List
 
@@ -9,9 +9,13 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnableParallel, RunnableLambda
 from langchain_classic.retrievers.multi_query import MultiQueryRetriever
 
-from memory import get_active_context, get_memory_summary
+# from memory import get_active_context, get_memory_summary
+try:
+    from source.native_memory import get_session_summary_memory, get_formatted_session_active_memory
+except ModuleNotFoundError:
+    from native_memory import get_session_summary_memory, get_formatted_session_active_memory
 
-def build_rag_chain(provider_name: str, retriever: MultiQueryRetriever):
+def build_rag_chain(provider_name: str, retriever: MultiQueryRetriever, config = None):
     provider = provider_name.lower().strip()
         
     if provider == "openai":
@@ -21,7 +25,7 @@ def build_rag_chain(provider_name: str, retriever: MultiQueryRetriever):
         llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0)
         
     elif provider == "nvidia":
-        llm = ChatNVIDIA(model="nvidia/llama-3.1-nemotron-70b-instruct", temperature=0)
+        llm = ChatGroq(model="openai/gpt-oss-20b", temperature=0)
         
     else:
         raise ValueError(f"Provider '{provider_name}' is unsupported.")
@@ -82,8 +86,8 @@ def build_rag_chain(provider_name: str, retriever: MultiQueryRetriever):
         "context": RunnableLambda(lambda x: x["question"]) | retriever | RunnableLambda(format_docs),
         "question": RunnableLambda(lambda x: x["question"]),
         "system_prompt": RunnableLambda(lambda _: system_prompt),
-        "active_memory": RunnableLambda(lambda x: x["current_memory"]),
-        "memory_summary": RunnableLambda(lambda x: x["memory_summary"])
+        "active_memory": RunnableLambda(lambda x, config: x["current_memory"] if "current_memory" in x else get_formatted_session_active_memory(config["configurable"]["session_id"])),
+        "memory_summary": RunnableLambda(lambda x, config: x["memory_summary"] if "memory_summary" in x else get_session_summary_memory(config["configurable"]["session_id"]))
     }) | prompt | llm
 
     return rag_chain

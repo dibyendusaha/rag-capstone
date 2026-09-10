@@ -2,6 +2,7 @@ import os
 import sys
 import uuid
 from pathlib import Path
+from dotenv import load_dotenv
 
 import streamlit as st
 
@@ -9,8 +10,17 @@ project_root = Path(__file__).resolve().parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+load_dotenv(project_root / ".env")
+
 from source.ingestion import load_documents
 from source.chunking import split_documents
+from source.embedding import get_embeddings_provider
+
+from source.vectordb import sync_documents_to_vector_db
+from source.retriever import get_retriever
+
+from source.rag_chain import build_rag_chain
+from source.native_memory import add_memory_to_rag_chain
 
 if "chat_sessions" not in st.session_state:
     st.session_state.chat_sessions = list()
@@ -122,6 +132,18 @@ span.model-engine-title span {
     color: #4B5563;
     margin-bottom: 0.5rem;
 }
+
+.llm-thinking {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    margin-top: -16px;
+    gap: 16px;
+    font-weight: 200;
+    font-style: italic;
+    font-size: 14px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -144,7 +166,7 @@ if st.sidebar.button("Start New Session", icon=":material/chat_add_on:", width="
     chat_session = {
         "_id": new_id,
         "name": new_name,
-        "llm_provider": "GEMINI",
+        "llm_provider": "OPENAI",
         "memory_enabled": False,
         "chat_history": []
     }
@@ -157,7 +179,7 @@ if not len(st.session_state.chat_sessions):
     chat_session = {
         "_id": new_id,
         "name": new_name,
-        "llm_provider": "GEMINI",
+        "llm_provider": "OPENAI",
         "memory_enabled": False,
         "chat_history": []
     }
@@ -232,7 +254,7 @@ with st.expander(":material/note_stack: **Knowledge Base & File Hub**", expanded
     )
 
     if uploaded_document:
-        with st.spinner("Ingesting and parsing documents for VectorDB embedding and indexing."):
+        with st.spinner("Ingesting and parsing documents for VectorDB embedding and indexing.", show_time=True):
             _id = st.session_state.active_session.get("_id", uuid.uuid4())
             file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "docs", f"{_id}_{uploaded_document.name}"))
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -250,19 +272,27 @@ with st.expander(":material/note_stack: **Knowledge Base & File Hub**", expanded
                 elif ext in [".docx", ".docs", ".doc"]:
                     file_icon = ""
                 
-                documents = load_documents(path=file_path)
-                chunks = split_documents(documents=documents, chunk_size=1000, chunk_overlap=200)
+                docs = load_documents(path=file_path)
+                chunks = split_documents(documents=docs, chunk_size=1000, chunk_overlap=200)
+                embedding = get_embeddings_provider(provider_name=st.session_state.active_session["llm_provider"])
+
+                vectorDB = sync_documents_to_vector_db(collection_name=st.session_state.active_session["_id"], documents=chunks, embedding_engine=embedding)
 
                 st.session_state.active_session["indexed_document_filename"] = uploaded_document.name
                 st.session_state.active_session["indexed_document_chunks"] = len(chunks)
                 st.session_state.active_session["disabled_uploader"] = True
                 st.session_state.active_session["expander"] = False
 
+                if os.path.exists(path=file_path):
+                    os.remove(path=file_path)
+
                 st.session_state.file_uploader_key += 1
                 st.rerun()
 
             except Exception as e:
                 st.error(f"We got an exception -> {e}", icon=":material/error:")
+                st.stop()
+
 
     if "indexed_document_filename" in st.session_state.active_session:
         st.success(f"VectorDB processed and indexed for - {st.session_state.active_session.get("indexed_document_filename", "")}")
@@ -278,19 +308,87 @@ with st.expander(":material/note_stack: **Knowledge Base & File Hub**", expanded
 
 
 if "indexed_document_filename" in st.session_state.active_session:
-    openai = "https://img.icons8.com/fluency-systems-regular/48/chatgpt.png"
-    gemini = "https://img.icons8.com/skeuomorphism/32/gemini-ai.png"
-    nvidia = "https://img.icons8.com/color/48/nvidia.png"
-    user = "https://img.icons8.com/retro/64/user.png"
+    try:
+        embedding = get_embeddings_provider(provider_name=st.session_state.active_session["llm_provider"])
 
+        vectorDB = sync_documents_to_vector_db(collection_name=st.session_state.active_session["_id"], documents=[], embedding_engine=embedding)
+
+        retriever = get_retriever(vectordb=vectorDB, provider_name=st.session_state.active_session["llm_provider"])
+
+        rag_chain = build_rag_chain(retriever=retriever, provider_name=st.session_state.active_session["llm_provider"])
+
+        rag_chain_with_memory = add_memory_to_rag_chain(
+            rag_chain=rag_chain,
+            enabled=st.session_state.active_session["memory_enabled"],
+            provider=st.session_state.active_session["llm_provider"],
+            session_id=st.session_state.active_session["_id"],
+        )
+
+    except Exception as e:
+        st.error(f"Error initializing backend: {e}")
+        st.stop()
     
+    icons = {
+        "openai": "https://img.icons8.com/fluency-systems-regular/64/chatgpt.png",
+        "gemini": "https://img.icons8.com/skeuomorphism/64/gemini-ai.png",
+        "nvidia": "https://img.icons8.com/color/64/nvidia.png"
+    }
+
+    provider_key = str(st.session_state.active_session["llm_provider"]).lower()
+    assistant_avatar = icons[provider_key]
+    user_avatar = "https://img.icons8.com/retro/64/user.png"
+
+
     for chat in st.session_state.active_session["chat_history"]:
         with st.chat_message(
             chat["role"],
-            avatar=":material/robot:" if chat["role"] == "assistant" else user
+            avatar=assistant_avatar if chat["role"] == "assistant" else user_avatar
         ):
             st.markdown(chat["content"])
 
 
-if prompt := st.chat_input("Ask questions about your ingested document"):
-    st.session_state.active_session["chat_history"].append({"role": "user", "content": prompt})
+    if prompt := st.chat_input("Ask questions about your ingested document"):
+        st.session_state.active_session["chat_history"].append({"role": "user", "content": prompt})
+
+        with st.chat_message("user", avatar=user_avatar):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant", avatar=assistant_avatar):
+            assistant_placeholder = st.empty()
+
+            with assistant_placeholder.container():
+                st.markdown(
+                    """
+                    <div class="llm-thinking">
+                        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHg9IjEiIHk9IjEiIGZpbGw9IiM4YjhiOGIiIHJ4PSIxIj48YW5pbWF0ZSBpZD0iU1ZHN0phZ0d6MlkiIGZpbGw9ImZyZWV6ZSIgYXR0cmlidXRlTmFtZT0ieCIgYmVnaW49IjA7U1ZHZ0RUMTliVVYuZW5kIiBkdXI9IjAuMnMiIHZhbHVlcz0iMTsxMyIvPjxhbmltYXRlIGlkPSJTVkdwUzFCZGRZayIgZmlsbD0iZnJlZXplIiBhdHRyaWJ1dGVOYW1lPSJ5IiBiZWdpbj0iU1ZHYzd5cThkbmUuZW5kIiBkdXI9IjAuMnMiIHZhbHVlcz0iMTsxMyIvPjxhbmltYXRlIGlkPSJTVkdib2E3RWRGbCIgZmlsbD0iZnJlZXplIiBhdHRyaWJ1dGVOYW1lPSJ4IiBiZWdpbj0iU1ZHMFpYOUM2RmEuZW5kIiBkdXI9IjAuMnMiIHZhbHVlcz0iMTM7MSIvPjxhbmltYXRlIGlkPSJTVkc2cnJ1c0wyQyIgZmlsbD0iZnJlZXplIiBhdHRyaWJ1dGVOYW1lPSJ5IiBiZWdpbj0iU1ZHVE9ubk81RHIuZW5kIiBkdXI9IjAuMnMiIHZhbHVlcz0iMTM7MSIvPjwvcmVjdD48cmVjdCB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHg9IjEiIHk9IjEzIiBmaWxsPSIjOGI4YjhiIiByeD0iMSI+PGFuaW1hdGUgaWQ9IlNWR2M3eXE4ZG5lIiBmaWxsPSJmcmVlemUiIGF0dHJpYnV0ZU5hbWU9InkiIGJlZ2luPSJTVkc3SmFnR3oyWS5lbmQiIGR1cj0iMC4ycyIgdmFsdWVzPSIxMzsxIi8+PGFuaW1hdGUgaWQ9IlNWRzBaWDlDNkZhIiBmaWxsPSJmcmVlemUiIGF0dHJpYnV0ZU5hbWU9IngiIGJlZ2luPSJTVkdwUzFCZGRZay5lbmQiIGR1cj0iMC4ycyIgdmFsdWVzPSIxOzEzIi8+PGFuaW1hdGUgaWQ9IlNWR1RPbm5PNURyIiBmaWxsPSJmcmVlemUiIGF0dHJpYnV0ZU5hbWU9InkiIGJlZ2luPSJTVkdib2E3RWRGbC5lbmQiIGR1cj0iMC4ycyIgdmFsdWVzPSIxOzEzIi8+PGFuaW1hdGUgaWQ9IlNWR2dEVDE5YlVWIiBmaWxsPSJmcmVlemUiIGF0dHJpYnV0ZU5hbWU9IngiIGJlZ2luPSJTVkc2cnJ1c0wyQy5lbmQiIGR1cj0iMC4ycyIgdmFsdWVzPSIxMzsxIi8+PC9yZWN0Pjwvc3ZnPg==" />
+                        <span>Retrieving from the most relevant result</span>
+                        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48Y2lyY2xlIGN4PSI0IiBjeT0iMTIiIHI9IjMiIGZpbGw9IiM4YjhiOGIiPjxhbmltYXRlIGlkPSJTVkc3eDE0RGNvbSIgZmlsbD0iZnJlZXplIiBhdHRyaWJ1dGVOYW1lPSJvcGFjaXR5IiBiZWdpbj0iMDtTVkdxU2pHMGRVcC5lbmQtMC4yNXMiIGR1cj0iMC43NXMiIHZhbHVlcz0iMTsuMiIvPjwvY2lyY2xlPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjMiIGZpbGw9IiM4YjhiOGIiIG9wYWNpdHk9Ii40Ij48YW5pbWF0ZSBmaWxsPSJmcmVlemUiIGF0dHJpYnV0ZU5hbWU9Im9wYWNpdHkiIGJlZ2luPSJTVkc3eDE0RGNvbS5iZWdpbiswLjE1cyIgZHVyPSIwLjc1cyIgdmFsdWVzPSIxOy4yIi8+PC9jaXJjbGU+PGNpcmNsZSBjeD0iMjAiIGN5PSIxMiIgcj0iMyIgZmlsbD0iIzhiOGI4YiIgb3BhY2l0eT0iLjMiPjxhbmltYXRlIGlkPSJTVkdxU2pHMGRVcCIgZmlsbD0iZnJlZXplIiBhdHRyaWJ1dGVOYW1lPSJvcGFjaXR5IiBiZWdpbj0iU1ZHN3gxNERjb20uYmVnaW4rMC4zcyIgZHVyPSIwLjc1cyIgdmFsdWVzPSIxOy4yIi8+PC9jaXJjbGU+PC9zdmc+" />
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+            full_response = ""
+
+            st.session_state.active_session["chat_history"].append({"role": "assistant", "content": full_response})
+            assistant_index = len(st.session_state.active_session["chat_history"]) - 1
+
+            try:
+                for chunk in rag_chain_with_memory.stream(
+                    {"question": prompt},
+                    config={"configurable": {"session_id": st.session_state.active_session["_id"]}},
+                ):
+                    chunk_response = getattr(chunk, "content", str(chunk))
+
+                    full_response += chunk_response
+
+                    st.session_state.active_session["chat_history"][assistant_index]["content"] = full_response
+
+                    assistant_placeholder.markdown(full_response + "▌")
+
+                assistant_placeholder.markdown(full_response)
+
+            except Exception as e:
+                full_response = f":red[:material/error:] Error: {e}"
+                st.session_state.active_session["chat_history"][assistant_index]["content"] = full_response
+                assistant_placeholder.error(full_response)

@@ -3,9 +3,9 @@ from langchain_classic.memory import ConversationSummaryMemory
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
+from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
 SESSION_MESSAGE_HISTORY = {}
 SESSION_MESSAGE_SUMMARY = {}
@@ -21,7 +21,7 @@ def get_llm_provider(provider_name: str):
         return ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0)
         
     elif provider == "nvidia":
-        return ChatNVIDIA(model="nvidia/llama-3.1-nemotron-70b-instruct", temperature=0)
+        return ChatGroq(model="openai/gpt-oss-20b", temperature=0)
         
     else:
         raise ValueError(f"Provider '{provider_name}' is unsupported.")
