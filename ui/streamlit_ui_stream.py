@@ -1,6 +1,5 @@
 import os
 import sys
-import time
 import uuid
 from pathlib import Path
 from dotenv import load_dotenv
@@ -22,11 +21,6 @@ from source.retriever import get_retriever
 
 from source.rag_chain import build_rag_chain
 from source.native_memory import add_memory_to_rag_chain
-
-def stream_data(text: str):
-    for word in text.split(" "):
-        yield(word + " ")
-        time.sleep(0.05)
 
 if "chat_sessions" not in st.session_state:
     st.session_state.chat_sessions = list()
@@ -368,6 +362,7 @@ if "indexed_document_filename" in st.session_state.active_session:
                 st.markdown(
                     """
                     <div class="llm-thinking">
+                        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHg9IjEiIHk9IjEiIGZpbGw9IiM4YjhiOGIiIHJ4PSIxIj48YW5pbWF0ZSBpZD0iU1ZHN0phZ0d6MlkiIGZpbGw9ImZyZWV6ZSIgYXR0cmlidXRlTmFtZT0ieCIgYmVnaW49IjA7U1ZHZ0RUMTliVVYuZW5kIiBkdXI9IjAuMnMiIHZhbHVlcz0iMTsxMyIvPjxhbmltYXRlIGlkPSJTVkdwUzFCZGRZayIgZmlsbD0iZnJlZXplIiBhdHRyaWJ1dGVOYW1lPSJ5IiBiZWdpbj0iU1ZHYzd5cThkbmUuZW5kIiBkdXI9IjAuMnMiIHZhbHVlcz0iMTsxMyIvPjxhbmltYXRlIGlkPSJTVkdib2E3RWRGbCIgZmlsbD0iZnJlZXplIiBhdHRyaWJ1dGVOYW1lPSJ4IiBiZWdpbj0iU1ZHMFpYOUM2RmEuZW5kIiBkdXI9IjAuMnMiIHZhbHVlcz0iMTM7MSIvPjxhbmltYXRlIGlkPSJTVkc2cnJ1c0wyQyIgZmlsbD0iZnJlZXplIiBhdHRyaWJ1dGVOYW1lPSJ5IiBiZWdpbj0iU1ZHVE9ubk81RHIuZW5kIiBkdXI9IjAuMnMiIHZhbHVlcz0iMTM7MSIvPjwvcmVjdD48cmVjdCB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHg9IjEiIHk9IjEzIiBmaWxsPSIjOGI4YjhiIiByeD0iMSI+PGFuaW1hdGUgaWQ9IlNWR2M3eXE4ZG5lIiBmaWxsPSJmcmVlemUiIGF0dHJpYnV0ZU5hbWU9InkiIGJlZ2luPSJTVkc3SmFnR3oyWS5lbmQiIGR1cj0iMC4ycyIgdmFsdWVzPSIxMzsxIi8+PGFuaW1hdGUgaWQ9IlNWRzBaWDlDNkZhIiBmaWxsPSJmcmVlemUiIGF0dHJpYnV0ZU5hbWU9IngiIGJlZ2luPSJTVkdwUzFCZGRZay5lbmQiIGR1cj0iMC4ycyIgdmFsdWVzPSIxOzEzIi8+PGFuaW1hdGUgaWQ9IlNWR1RPbm5PNURyIiBmaWxsPSJmcmVlemUiIGF0dHJpYnV0ZU5hbWU9InkiIGJlZ2luPSJTVkdib2E3RWRGbC5lbmQiIGR1cj0iMC4ycyIgdmFsdWVzPSIxOzEzIi8+PGFuaW1hdGUgaWQ9IlNWR2dEVDE5YlVWIiBmaWxsPSJmcmVlemUiIGF0dHJpYnV0ZU5hbWU9IngiIGJlZ2luPSJTVkc2cnJ1c0wyQy5lbmQiIGR1cj0iMC4ycyIgdmFsdWVzPSIxMzsxIi8+PC9yZWN0Pjwvc3ZnPg==" />
                         <span>Retrieving from the most relevant result</span>
                         <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48Y2lyY2xlIGN4PSI0IiBjeT0iMTIiIHI9IjMiIGZpbGw9IiM4YjhiOGIiPjxhbmltYXRlIGlkPSJTVkc3eDE0RGNvbSIgZmlsbD0iZnJlZXplIiBhdHRyaWJ1dGVOYW1lPSJvcGFjaXR5IiBiZWdpbj0iMDtTVkdxU2pHMGRVcC5lbmQtMC4yNXMiIGR1cj0iMC43NXMiIHZhbHVlcz0iMTsuMiIvPjwvY2lyY2xlPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjMiIGZpbGw9IiM4YjhiOGIiIG9wYWNpdHk9Ii40Ij48YW5pbWF0ZSBmaWxsPSJmcmVlemUiIGF0dHJpYnV0ZU5hbWU9Im9wYWNpdHkiIGJlZ2luPSJTVkc3eDE0RGNvbS5iZWdpbiswLjE1cyIgZHVyPSIwLjc1cyIgdmFsdWVzPSIxOy4yIi8+PC9jaXJjbGU+PGNpcmNsZSBjeD0iMjAiIGN5PSIxMiIgcj0iMyIgZmlsbD0iIzhiOGI4YiIgb3BhY2l0eT0iLjMiPjxhbmltYXRlIGlkPSJTVkdxU2pHMGRVcCIgZmlsbD0iZnJlZXplIiBhdHRyaWJ1dGVOYW1lPSJvcGFjaXR5IiBiZWdpbj0iU1ZHN3gxNERjb20uYmVnaW4rMC4zcyIgZHVyPSIwLjc1cyIgdmFsdWVzPSIxOy4yIi8+PC9jaXJjbGU+PC9zdmc+" />
                     </div>
@@ -381,17 +376,21 @@ if "indexed_document_filename" in st.session_state.active_session:
             assistant_index = len(st.session_state.active_session["chat_history"]) - 1
 
             try:
-                response = rag_chain_with_memory.invoke(
+                for chunk in rag_chain_with_memory.stream(
                     {"question": prompt},
                     config={"configurable": {"session_id": st.session_state.active_session["_id"]}},
-                )
-                full_response = getattr(response, "content", str(response))
+                ):
+                    chunk_response = getattr(chunk, "content", str(chunk))
 
-                st.session_state.active_session["chat_history"][assistant_index]["content"] = full_response
+                    full_response += chunk_response
 
-                assistant_placeholder.write_stream(stream_data(full_response))
+                    st.session_state.active_session["chat_history"][assistant_index]["content"] = full_response
+
+                    assistant_placeholder.markdown(full_response + "▌")
+
+                assistant_placeholder.markdown(full_response)
 
             except Exception as e:
                 full_response = f":red[:material/error:] Error: {e}"
                 st.session_state.active_session["chat_history"][assistant_index]["content"] = full_response
-                assistant_placeholder.error(stream_data(full_response))
+                assistant_placeholder.error(full_response)

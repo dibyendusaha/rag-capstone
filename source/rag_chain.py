@@ -24,7 +24,7 @@ def build_rag_chain(provider_name: str, retriever: MultiQueryRetriever, config =
     elif provider == "google" or provider == "gemini":
         llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0)
         
-    elif provider == "nvidia":
+    elif provider == "groq":
         llm = ChatGroq(model="openai/gpt-oss-20b", temperature=0)
         
     else:

@@ -15,7 +15,7 @@ def get_embeddings_provider(provider_name: str) -> GoogleGenerativeAIEmbeddings 
             model="text-embedding-3-small"
         )
 
-    elif provider == "nvidia":
+    elif provider == "groq":
         return HuggingFaceEmbeddings(
             model_name="BAAI/bge-small-en-v1.5"
         )
@@ -23,5 +23,5 @@ def get_embeddings_provider(provider_name: str) -> GoogleGenerativeAIEmbeddings 
     else:
         raise ValueError(
             f"Unsupported provider: '{provider_name}'. "
-            f"Please choose from 'google/gemini', 'openai', or 'nvidia'."
+            f"Please choose from 'google/gemini', 'openai', or 'groq'."
         )
