@@ -177,6 +177,7 @@ if st.sidebar.button("Start New Session", icon=":material/chat_add_on:", width="
         "chat_history": []
     }
     st.session_state.chat_sessions.append(chat_session)
+    st.session_state["select-chat-session"] = new_name
     st.session_state.active_session = chat_session
 
 if not len(st.session_state.chat_sessions):
@@ -313,7 +314,7 @@ with st.expander(":material/note_stack: **Knowledge Base & File Hub**", expanded
         )
 
 if "indexed_document_filename" in st.session_state.active_session and str(st.session_state.active_session["llm_provider"]).lower() == "groq":
-    st.warning(":yellow[:material/warning:] Except slower response when selecting **groq**")
+    st.warning(":yellow[:material/warning:] Expect slower response when selecting **groq**")
 
 if "indexed_document_filename" in st.session_state.active_session:
     try:
@@ -386,6 +387,8 @@ if "indexed_document_filename" in st.session_state.active_session:
                     config={"configurable": {"session_id": st.session_state.active_session["_id"]}},
                 )
                 full_response = getattr(response, "content", str(response))
+                if (provider_key == "gemini"):
+                    full_response = full_response[0]["text"]
 
                 st.session_state.active_session["chat_history"][assistant_index]["content"] = full_response
 
